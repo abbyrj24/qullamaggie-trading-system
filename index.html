@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Qullamaggie Trading System</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#06090f;font-family:'Outfit',sans-serif;color:#e6edf3}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:#0d1117}
+::-webkit-scrollbar-thumb{background:#21262d;border-radius:3px}
+input,select,textarea,button{font-family:inherit}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.15.0/Recharts.min.js"></script>
+<script>
+"use strict";
+var h=React.createElement,us=React.useState,ue=React.useEffect;
+var RC=Recharts;
+
+var C={bg:"#06090f",bgCard:"#0d1117",bgHover:"#161b22",border:"#21262d",text:"#e6edf3",textDim:"#7d8590",textMuted:"#484f58",accent:"#58a6ff",accentGlow:"rgba(88,166,255,0.12)",green:"#3fb950",greenDim:"rgba(63,185,80,0.15)",red:"#f85149",redDim:"rgba(248,81,73,0.12)",amber:"#d29922",amberDim:"rgba(210,153,34,0.12)",purple:"#bc8cff",purpleDim:"rgba(188,140,255,0.12)",cyan:"#39d2c0",cyanDim:"rgba(57,210,192,0.12)",orange:"#f0883e"};
+var mono="'JetBrains Mono',monospace",sans="'Outfit',sans-serif";
+var iS={padding:"10px 12px",background:C.bg,border:"1px solid "+C.border,borderRadius:6,color:C.text,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:mono};
+var lS={color:C.textDim,fontSize:10,textTransform:"uppercase",letterSpacing:1.5,marginBottom:4};
+
+function gk(){return localStorage.getItem("qm_key")||""}
+function sk(k){localStorage.setItem("qm_key",k)}
+function sGet(k){try{var v=localStorage.getItem("qm_"+k);return v?JSON.parse(v):null}catch(e){return null}}
+function sSet(k,v){try{localStorage.setItem("qm_"+k,JSON.stringify(v))}catch(e){}}
+
+function Badge(p){return h("span",{style:{padding:"3px 10px",borderRadius:5,fontSize:11,fontWeight:700,letterSpacing:.5,background:p.color+"22",color:p.color,textTransform:"uppercase"}},p.children)}
+function Stat(p){return h("div",{style:{padding:p.small?10:14,background:C.bgCard,borderRadius:8,border:"1px solid "+C.border,textAlign:"center"}},h("div",{style:{color:C.textDim,fontSize:9,textTransform:"uppercase",letterSpacing:1.5,marginBottom:4}},p.label),h("div",{style:{color:p.color||C.text,fontSize:p.small?15:19,fontWeight:800,fontFamily:mono}},p.value))}
+
+function ApiKeySetup(p){
+  var s=us(gk()),k=s[0],setK=s[1];
+  return h("div",{style:{padding:24,background:C.bgCard,borderRadius:12,border:"1px solid "+C.accent+"33",maxWidth:500,margin:"40px auto"}},
+    h("div",{style:{fontSize:20,fontWeight:800,marginBottom:6}},"🔑 API Key Required"),
+    h("div",{style:{color:C.textDim,fontSize:13,lineHeight:1.6,marginBottom:16}},"The AI Scanner needs your Anthropic API key to analyze stocks. It's stored only in your browser."),
+    h("div",{style:lS},"Anthropic API Key"),
+    h("input",{type:"password",value:k,onChange:function(e){setK(e.target.value)},placeholder:"sk-ant-api03-...",style:Object.assign({},iS,{fontSize:14,padding:"12px 14px",marginBottom:12})}),
+    h("button",{onClick:function(){sk(k);p.onSave()},disabled:!k.startsWith("sk-"),style:{padding:"10px 24px",background:k.startsWith("sk-")?C.accent:C.bgHover,border:"none",borderRadius:6,color:"#fff",fontSize:14,fontWeight:600,cursor:k.startsWith("sk-")?"pointer":"not-allowed"}},"Save & Continue"),
+    h("div",{style:{color:C.textMuted,fontSize:11,marginTop:12}},"Get key at ",h("a",{href:"https://console.anthropic.com/settings/keys",target:"_blank",style:{color:C.accent}},"console.anthropic.com"),". Other tabs work without a key."))
+}
+
+// ═══════════════ SCANNER ═══════════════
+function Scanner(){
+  var s1=us(""),ticker=s1[0],setTicker=s1[1];
+  var s2=us(null),analysis=s2[0],setAnalysis=s2[1];
+  var s3=us(false),loading=s3[0],setLoading=s3[1];
+  var s4=us(""),error=s4[0],setError=s4[1];
+  var s5=us([]),history=s5[0],setHistory=s5[1];
+  var s6=us(!gk()),needsKey=s6[0],setNeedsKey=s6[1];
+
+  ue(function(){var d=sGet("hist");if(d)setHistory(d)},[]);
+  if(needsKey)return h(ApiKeySetup,{onSave:function(){setNeedsKey(false)}});
+
+  var qC=function(q){return q>=8?C.green:q>=5?C.amber:C.red};
+  var rC=function(r){return{READY:C.green,WATCH:C.amber,AVOID:C.red}[r]||C.textDim};
+  var sC=function(s){return{BREAKOUT:C.cyan,EP:C.purple,PARABOLIC_SHORT:C.orange,NO_SETUP:C.textMuted}[s]||C.textDim};
+
+  function analyze(){
+    if(!ticker.trim())return;
+    var ak=gk();if(!ak){setNeedsKey(true);return}
+    setLoading(true);setError("");setAnalysis(null);
+    fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":ak,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,
+        system:"You are a Qullamaggie-style swing trading analysis API. Respond ONLY with a valid JSON object. No markdown, no text before or after the JSON.",
+        messages:[{role:"user",content:"Search for latest data on "+ticker.toUpperCase()+" and analyze using Qullamaggie's methodology. Return ONLY this JSON structure: {\"ticker\":\""+ticker.toUpperCase()+"\",\"company\":\"name\",\"price\":\"price\",\"change_pct\":\"%\",\"adr_pct\":\"ADR%\",\"relative_strength\":\"vs SPY\",\"setup_type\":\"BREAKOUT or EP or PARABOLIC_SHORT or NO_SETUP\",\"setup_quality\":7,\"summary\":\"2-3 sentences\",\"consolidation_quality\":\"tight or loose\",\"volume_profile\":\"desc\",\"prior_move_pct\":\"%\",\"consolidation_days\":\"days\",\"ema10_position\":\"above or below\",\"ema20_position\":\"above or below\",\"ema50_position\":\"above or below\",\"breakout_level\":\"price\",\"stop_level\":\"price\",\"risk_pct\":\"%\",\"catalysts\":[\"c1\"],\"bull_case\":[\"b1\",\"b2\",\"b3\"],\"bear_case\":[\"b1\",\"b2\",\"b3\"],\"qm_checklist\":{\"prior_move_30pct\":true,\"orderly_consolidation\":true,\"surfing_10_20_ema\":true,\"tightening_range\":true,\"volume_contraction\":true,\"above_50_ema\":true},\"recommendation\":\"READY or WATCH or AVOID\",\"timeframe\":\"period\"}"}],
+        tools:[{type:"web_search_20250305",name:"web_search"}]})
+    }).then(function(r){return r.json()}).then(function(data){
+      if(!data||data.error)throw new Error(data&&data.error?data.error.message:"API error");
+      if(!data.content||!Array.isArray(data.content))throw new Error("Bad response format");
+      var text=data.content.filter(function(i){return i.type==="text"&&i.text}).map(function(i){return i.text}).join("\n");
+      if(!text)throw new Error("Empty response");
+      var m=text.match(/\{[\s\S]*\}/);if(!m)throw new Error("No JSON found");
+      var parsed=JSON.parse(m[0].replace(/```json|```/g,"").trim());
+      setAnalysis(parsed);
+      var nh=[Object.assign({},parsed,{date:new Date().toISOString()})].concat(history).slice(0,20);
+      setHistory(nh);sSet("hist",nh);
+    }).catch(function(err){
+      if(err.message&&err.message.indexOf("api_key")>-1){setNeedsKey(true);return}
+      setError("Analysis failed: "+err.message);
+    }).finally(function(){setLoading(false)});
+  }
+
+  var items=[];
+  items.push(h("div",{key:"s",style:{display:"flex",gap:12}},
+    h("input",{value:ticker,onChange:function(e){setTicker(e.target.value.toUpperCase())},onKeyDown:function(e){if(e.key==="Enter")analyze()},placeholder:"Enter ticker — NVDA, PLTR, SMCI",style:Object.assign({},iS,{flex:1,fontSize:15,padding:"14px 18px"})}),
+    h("button",{onClick:analyze,disabled:loading,style:{padding:"14px 28px",background:loading?C.bgHover:C.accent,border:"none",borderRadius:8,color:"#fff",fontSize:14,fontWeight:700,cursor:loading?"wait":"pointer",whiteSpace:"nowrap"}},loading?"⟳ Scanning...":"⚡ Scan Setup"),
+    h("button",{onClick:function(){setNeedsKey(true)},title:"Change API Key",style:{padding:"14px",background:"transparent",border:"1px solid "+C.border,borderRadius:8,color:C.textDim,cursor:"pointer"}},"🔑")));
+
+  if(error)items.push(h("div",{key:"e",style:{padding:12,background:C.redDim,borderRadius:6,color:C.red,fontSize:13}},error));
+
+  if(analysis){
+    var a=analysis,cl=a.qm_checklist||{};
+    items.push(h("div",{key:"h",style:{padding:20,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16}},
+      h("div",null,
+        h("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}},
+          h("span",{style:{fontSize:26,fontWeight:800,fontFamily:mono}},a.ticker),
+          h(Badge,{color:sC(a.setup_type)},(a.setup_type||"").replace(/_/g," ")),
+          h(Badge,{color:rC(a.recommendation)},a.recommendation)),
+        h("div",{style:{color:C.textDim,fontSize:13}},a.company),
+        h("div",{style:{display:"flex",gap:16,marginTop:6,flexWrap:"wrap"}},
+          [{l:"Price",v:a.price,c:C.text},{l:"Chg",v:a.change_pct,c:String(a.change_pct||"").indexOf("-")>-1?C.red:C.green},{l:"ADR",v:a.adr_pct,c:C.amber},{l:"Risk",v:a.risk_pct,c:C.red}].map(function(d,i){return h("span",{key:i,style:{fontSize:12,color:C.textDim}},d.l+": ",h("span",{style:{color:d.c,fontFamily:mono,fontWeight:600}},d.v))}))),
+      h("div",{style:{textAlign:"center"}},
+        h("div",{style:{fontSize:9,color:C.textDim,textTransform:"uppercase",letterSpacing:1.5,marginBottom:4}},"Quality"),
+        h("div",{style:{width:60,height:60,borderRadius:"50%",border:"3px solid "+qC(a.setup_quality),display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800,color:qC(a.setup_quality),fontFamily:mono}},a.setup_quality))));
+
+    var clI=[{k:"prior_move_30pct",l:"Prior move 30-100%+"},{k:"orderly_consolidation",l:"Orderly consolidation 2-8 weeks"},{k:"surfing_10_20_ema",l:"Surfing 10 & 20 EMA"},{k:"tightening_range",l:"Tightening range, higher lows"},{k:"volume_contraction",l:"Volume contracting in base"},{k:"above_50_ema",l:"Above 50 EMA"}];
+    var passed=Object.values(cl).filter(Boolean).length;
+    items.push(h("div",{key:"cl",style:{padding:18,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+      h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:14}},
+        h("div",{style:{color:C.cyan,fontSize:13,fontWeight:700}},"📋 Qullamaggie Checklist"),
+        h("div",{style:{color:C.textDim,fontSize:12}},passed+"/"+clI.length+" passed")),
+      h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
+        clI.map(function(it){var p=cl[it.k];return h("div",{key:it.k,style:{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:p?C.greenDim:C.redDim,borderRadius:5}},h("span",{style:{fontSize:14}},p?"✅":"❌"),h("span",{style:{color:p?C.green:C.red,fontSize:12}},it.l))}))));
+
+    items.push(h("div",{key:"lv",style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}},
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:lS},"EMA Position"),
+        [{l:"10 EMA",v:a.ema10_position},{l:"20 EMA",v:a.ema20_position},{l:"50 EMA",v:a.ema50_position}].map(function(d,i){return h("div",{key:i,style:{display:"flex",justifyContent:"space-between",marginTop:8}},h("span",{style:{color:C.textDim,fontSize:12}},d.l),h("span",{style:{color:d.v==="above"?C.green:C.red,fontFamily:mono,fontSize:13,fontWeight:600,textTransform:"uppercase"}},d.v))})),
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:lS},"Trade Levels"),
+        [{l:"Breakout",v:a.breakout_level,c:C.cyan},{l:"Stop",v:a.stop_level,c:C.red},{l:"Hold",v:a.timeframe,c:C.text}].map(function(d,i){return h("div",{key:i,style:{display:"flex",justifyContent:"space-between",marginTop:8}},h("span",{style:{color:C.textDim,fontSize:12}},d.l),h("span",{style:{color:d.c,fontFamily:mono,fontSize:13,fontWeight:600}},d.v))})),
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:lS},"Base Structure"),
+        [{l:"Prior Move",v:a.prior_move_pct,c:C.green},{l:"Base Days",v:a.consolidation_days,c:C.text},{l:"Tightness",v:a.consolidation_quality,c:C.amber}].map(function(d,i){return h("div",{key:i,style:{display:"flex",justifyContent:"space-between",marginTop:8}},h("span",{style:{color:C.textDim,fontSize:12}},d.l),h("span",{style:{color:d.c,fontSize:13}},d.v))}))));
+
+    items.push(h("div",{key:"sm",style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},h("div",{style:Object.assign({},lS,{marginBottom:8})},"Chart Structure"),h("div",{style:{color:C.text,fontSize:13,lineHeight:1.7}},a.summary)),
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},h("div",{style:Object.assign({},lS,{marginBottom:8})},"Volume & RS"),h("div",{style:{color:C.text,fontSize:13,lineHeight:1.7}},a.volume_profile),h("div",{style:{color:C.textDim,fontSize:13,marginTop:8}},"RS: ",h("span",{style:{color:C.text}},a.relative_strength)))));
+
+    items.push(h("div",{key:"bb",style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:{color:C.green,fontSize:13,fontWeight:700,marginBottom:10}},"🐂 Bull Case"),
+        (a.bull_case||[]).map(function(p,i){return h("div",{key:i,style:{color:C.text,fontSize:12,lineHeight:1.6,marginBottom:6,paddingLeft:10,borderLeft:"2px solid "+C.green+"33"}},p)})),
+      h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:{color:C.red,fontSize:13,fontWeight:700,marginBottom:10}},"🐻 Bear Case"),
+        (a.bear_case||[]).map(function(p,i){return h("div",{key:i,style:{color:C.text,fontSize:12,lineHeight:1.6,marginBottom:6,paddingLeft:10,borderLeft:"2px solid "+C.red+"33"}},p)}))));
+
+    if((a.catalysts||[]).length)items.push(h("div",{key:"ct",style:{padding:14,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},h("div",{style:Object.assign({},lS,{marginBottom:8})},"Catalysts"),h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},a.catalysts.map(function(c,i){return h("span",{key:i,style:{padding:"5px 12px",background:C.amberDim,borderRadius:5,color:C.amber,fontSize:12}},"◆ "+c)}))));
+  }
+
+  if(!analysis&&history.length>0)items.push(h("div",{key:"hi"},h("div",{style:lS},"Recent Scans"),h("div",{style:{display:"flex",flexDirection:"column",gap:6,marginTop:8}},history.map(function(x,i){return h("div",{key:i,onClick:function(){setTicker(x.ticker);setAnalysis(x)},style:{padding:"10px 14px",background:C.bgCard,borderRadius:6,border:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}},h("div",{style:{display:"flex",alignItems:"center",gap:10}},h("span",{style:{fontFamily:mono,fontWeight:700}},x.ticker),h(Badge,{color:sC(x.setup_type)},(x.setup_type||"").replace(/_/g," ")),h(Badge,{color:rC(x.recommendation)},x.recommendation)),h("span",{style:{color:qC(x.setup_quality),fontFamily:mono,fontSize:14}},x.setup_quality+"/10"))}))));
+
+  if(!analysis&&!history.length)items.push(h("div",{key:"em",style:{textAlign:"center",padding:50,color:C.textDim}},h("div",{style:{fontSize:44,marginBottom:14}},"🔍"),h("div",{style:{fontSize:15}},"AI Setup Scanner — Qullamaggie Style"),h("div",{style:{fontSize:12,color:C.textMuted,marginTop:4}},"Grades stocks against Kristjan's checklist")));
+
+  return h("div",{style:{display:"flex",flexDirection:"column",gap:20}},items);
+}
+
+// ═══════════════ TRADE PLANNER ═══════════════
+function Planner(){
+  var s1=us("BREAKOUT"),st=s1[0],setSt=s1[1];
+  var s2=us(25000),ac=s2[0],setAc=s2[1];var s3=us(0.5),rp=s3[0],setRp=s3[1];
+  var s4=us(""),en=s4[0],setEn=s4[1];var s5=us(""),sp=s5[0],setSp=s5[1];var s6=us(""),ad=s6[0],setAd=s6[1];
+
+  var eF=parseFloat(en)||0,sF=parseFloat(sp)||0,aF=parseFloat(ad)||0;
+  var rA=ac*(rp/100),rPS=eF&&sF?Math.abs(eF-sF):0,swP=eF>0?rPS/eF*100:0;
+  var pS=rPS>0?Math.floor(rA/rPS):0,tC=pS*eF,pp=ac>0?(tC/ac*100).toFixed(1):0;
+  var ok=aF>0?swP<=aF:true;
+
+  var QR={BREAKOUT:["Entry: Break above consolidation high / ORH","Stop: Low of entry day (≤ ADR% wide)","Sell ⅓ to ½ after 3-5 days","Move stop to break-even","Trail with 10 or 20 EMA","Exit on close below trailing EMA","Winners run 10-20x initial risk"],EP:["Entry: Break of 1m/5m opening range high","Only if gap ≥10% on heavy volume","Stock flat/neglected prior 3-6 months","Stop: Morning low / ORB low","Stop ≤ ADR%","Trail 10/20 EMA — runs weeks/months","Volume is KEY"],PARABOLIC_SHORT:["Wait for fatigue after vertical move","Short first clear break lower","Stop: Above day's high","Cover into 10/20 EMA pullback","Can long bounce off collapse","Sell bounce into first push","Never turn trade into investment"]};
+
+  return h("div",{style:{display:"flex",flexDirection:"column",gap:20}},
+    h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}},
+      [{id:"BREAKOUT",i:"📈",n:"Breakout / HTF",d:"Staircase continuation"},{id:"EP",i:"⚡",n:"Episodic Pivot",d:"Earnings/news gap"},{id:"PARABOLIC_SHORT",i:"🔻",n:"Parabolic Short",d:"Overextended reversal"}].map(function(x){return h("div",{key:x.id,onClick:function(){setSt(x.id)},style:{padding:14,background:st===x.id?C.accentGlow:C.bgCard,borderRadius:8,border:"1px solid "+(st===x.id?C.accent:C.border),cursor:"pointer"}},h("div",{style:{fontSize:18,marginBottom:4}},x.i),h("div",{style:{color:st===x.id?C.accent:C.text,fontWeight:700,fontSize:13}},x.n),h("div",{style:{color:C.textDim,fontSize:11}},x.d))})),
+    h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}},
+      h("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+        h("div",{style:{padding:18,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+          h("div",{style:{color:C.text,fontSize:14,fontWeight:700,marginBottom:14}},"Account & Risk"),
+          h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+            h("div",null,h("div",{style:lS},"Account Size"),h("input",{type:"number",value:ac,onChange:function(e){setAc(parseFloat(e.target.value)||0)},style:iS})),
+            h("div",null,h("div",{style:lS},"Risk %"),h("input",{type:"number",value:rp,onChange:function(e){setRp(parseFloat(e.target.value)||0)},style:iS,step:"0.25"}),
+              h("div",{style:{display:"flex",gap:4,marginTop:6}},[.25,.5,.75,1,1.5].map(function(v){return h("button",{key:v,onClick:function(){setRp(v)},style:{padding:"3px 8px",borderRadius:4,fontSize:11,cursor:"pointer",background:rp===v?C.accent:"transparent",border:"1px solid "+(rp===v?C.accent:C.border),color:rp===v?"#fff":C.textDim}},v+"%")}))))),
+        h("div",{style:{padding:18,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+          h("div",{style:{color:C.text,fontSize:14,fontWeight:700,marginBottom:14}},"Trade Setup"),
+          h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}},
+            h("div",null,h("div",{style:lS},"Entry"),h("input",{type:"number",value:en,onChange:function(e){setEn(e.target.value)},style:iS,placeholder:"0.00"})),
+            h("div",null,h("div",{style:lS},"Stop (LOD)"),h("input",{type:"number",value:sp,onChange:function(e){setSp(e.target.value)},style:Object.assign({},iS,{borderColor:sp?C.red+"66":C.border}),placeholder:"0.00"})),
+            h("div",null,h("div",{style:lS},"ADR %"),h("input",{type:"number",value:ad,onChange:function(e){setAd(e.target.value)},style:iS,placeholder:"5.0"}))),
+          eF>0&&sF>0&&!ok?h("div",{style:{marginTop:10,padding:"8px 12px",background:C.redDim,borderRadius:6,color:C.red,fontSize:12}},"⚠️ Stop ("+swP.toFixed(1)+"%) > ADR ("+aF+"%) — too wide per QM rules"):null),
+        eF>0&&sF>0?h("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}},
+          h(Stat,{label:"Shares",value:pS,color:C.accent,small:true}),
+          h(Stat,{label:"$ Risk",value:"$"+rA.toFixed(0),color:C.red,small:true}),
+          h(Stat,{label:"Cost",value:"$"+tC.toFixed(0),color:C.text,small:true}),
+          h(Stat,{label:"Stop %",value:swP.toFixed(1)+"%",color:ok?C.green:C.red,small:true}),
+          h(Stat,{label:"vs ADR",value:aF>0?(swP/aF*100).toFixed(0)+"%":"—",color:C.amber,small:true}),
+          h(Stat,{label:"Portf %",value:pp+"%",color:parseFloat(pp)>25?C.red:C.text,small:true})):null,
+        eF>0&&sF>0?h("div",{style:{padding:16,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+          h("div",{style:lS},"R-Multiple Targets"),
+          [{l:"1R (sell ⅓-½)",p:eF+rPS,r:"1R",c:C.amber},{l:"2R",p:eF+rPS*2,r:"2R",c:C.green},{l:"3R (trail EMA)",p:eF+rPS*3,r:"3R",c:C.cyan}].map(function(t,i){return h("div",{key:i,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:i<2?"1px solid "+C.border:"none"}},h("div",{style:{display:"flex",alignItems:"center",gap:8}},h(Badge,{color:t.c},t.r),h("span",{style:{color:C.textDim,fontSize:12}},t.l)),h("span",{style:{fontFamily:mono,color:C.text,fontSize:14,fontWeight:600}},"$"+t.p.toFixed(2)))}),
+          h("div",{style:{marginTop:10,color:C.textDim,fontSize:11,fontStyle:"italic"}},"Win rate ~25% is normal. The edge is in big R winners.")):null),
+      h("div",{style:{padding:18,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},
+        h("div",{style:{color:C.cyan,fontSize:14,fontWeight:700,marginBottom:4}},"📜 "+st.replace(/_/g," ")+" Rules"),
+        h("div",{style:{color:C.textDim,fontSize:11,marginBottom:14}},"Kristjan's exact methodology"),
+        QR[st].map(function(r,i){return h("div",{key:i,style:{padding:"10px 12px",marginBottom:6,borderRadius:6,background:C.bg,border:"1px solid "+C.border,color:C.text,fontSize:12,lineHeight:1.5,display:"flex",gap:10}},h("span",{style:{color:C.cyan,fontFamily:mono,fontSize:11,flexShrink:0}},String(i+1).padStart(2,"0")),r)}),
+        h("div",{style:{marginTop:16,padding:14,background:C.purpleDim,borderRadius:8}},
+          h("div",{style:{color:C.purple,fontSize:12,fontWeight:700,marginBottom:6}},"💡 Core Formula"),
+          h("div",{style:{fontFamily:mono,color:C.text,fontSize:12}},"Position = Risk$ / (Entry − Stop)"),
+          h("div",{style:{color:C.textDim,fontSize:11,marginTop:6,lineHeight:1.6}},"\"It's not about how often you win. It's how much you make when you win.\"")))))
+}
+
+// ═══════════════ STUDY LAB ═══════════════
+function Study(){
+  var QW=[{q:"Stocks move like staircases. Your job is to buy when the next step forms.",c:"Setup"},{q:"If you could only trade one setup — the high-tight flag.",c:"HTF"},{q:"It's not how often you win. It's how much you make when you win.",c:"Risk"},{q:"Stop should NOT be wider than the ADR.",c:"Stops"},{q:"Sell ⅓-½ after 3-5 days. Trail rest with 10/20 EMA.",c:"Mgmt"},{q:"Scan top 1-2% performers over 1m, 3m, 6m.",c:"Scanning"},{q:"Spend THOUSANDS of hours studying winning stocks. No shortcuts.",c:"Study"},{q:"Unexpected good news + neglected stock = multi-month moves.",c:"EP"},{q:"Turn off CNBC. They are not your friend.",c:"Psychology"},{q:"Win rate ~25%. Big winners make up for all the losses.",c:"Expectation"}];
+  var s=us(0),wi=s[0],setWi=s[1];
+
+  return h("div",{style:{display:"flex",flexDirection:"column",gap:18}},
+    h("div",{onClick:function(){setWi((wi+1)%QW.length)},style:{padding:20,background:"linear-gradient(135deg,"+C.purpleDim+","+C.cyanDim+")",borderRadius:10,border:"1px solid "+C.purple+"33",cursor:"pointer"}},
+      h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},h(Badge,{color:C.purple},QW[wi].c),h("span",{style:{color:C.textDim,fontSize:11}},"Click → "+(wi+1)+"/"+QW.length)),
+      h("div",{style:{color:C.text,fontSize:14,lineHeight:1.7,fontStyle:"italic"}},"\""+QW[wi].q+"\""),
+      h("div",{style:{color:C.purple,fontSize:12,marginTop:8,fontWeight:600}},"— Kristjan Kullamägi")),
+    h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}},
+      [{s:"01",t:"Build Master List",d:"Top 1-2% performers over 1m, 3m, 6m."},{s:"02",t:"Find Staircases",d:"30-100%+ move → orderly pullback on 10/20 EMA."},{s:"03",t:"Wait for Trigger",d:"Breakout + volume. Stop ≤ ADR%. Trail EMA."}].map(function(x){return h("div",{key:x.s,style:{padding:14,background:C.bgCard,borderRadius:8,border:"1px solid "+C.border}},h("div",{style:{color:C.cyan,fontFamily:mono,fontSize:20,fontWeight:800,marginBottom:6}},x.s),h("div",{style:{color:C.text,fontSize:13,fontWeight:700,marginBottom:4}},x.t),h("div",{style:{color:C.textDim,fontSize:11,lineHeight:1.5}},x.d))})),
+    h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}},
+      [{n:"Breakout / HTF",c:C.cyan,i:"📈",r:["Prior move 30-100%+","2-8 week consolidation","Surfing 10/20 EMA","Tightening range + vol dry-up","Break of consolidation high","Stop: LOD ≤ ADR%","Trail: 10/20 EMA"]},{n:"Episodic Pivot",c:C.purple,i:"⚡",r:["Gap ≥10% on earnings/news","Heavy vol first 30 min","Flat/neglected 3-6 months","Break of 1m/5m ORH","Stop: Morning low","Runs weeks to months","Volume is everything"]},{n:"Parabolic Short",c:C.orange,i:"🔻",r:["Vertical move → fatigue","Short first break lower","Stop: Above day's high","Cover at 10/20 EMA","Can long the bounce","Sell bounce into push","Never hold too long"]}].map(function(x){return h("div",{key:x.n,style:{padding:14,background:C.bgCard,borderRadius:10,border:"1px solid "+C.border}},h("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},h("span",{style:{fontSize:18}},x.i),h("span",{style:{color:x.c,fontWeight:700,fontSize:13}},x.n)),x.r.map(function(r,i){return h("div",{key:i,style:{color:C.textDim,fontSize:11,lineHeight:1.5,marginBottom:3,paddingLeft:8,borderLeft:"2px solid "+x.c+"33"}},r)}))})))
+}
+
+// ═══════════════ MAIN ═══════════════
+var TABS=[{id:"scanner",n:"AI Scanner",i:"🔍",d:"Setup grader"},{id:"planner",n:"Trade Planner",i:"🎯",d:"Position sizing"},{id:"study",n:"Study Lab",i:"📚",d:"Patterns"}];
+
+function App(){
+  var s1=us("scanner"),tab=s1[0],setTab=s1[1];
+  var s2=us(new Date()),time=s2[0],setTime=s2[1];
+  ue(function(){var t=setInterval(function(){setTime(new Date())},1000);return function(){clearInterval(t)}},[]);
+
+  return h("div",{style:{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:sans}},
+    h("div",{style:{padding:"14px 24px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center",background:"linear-gradient(180deg,"+C.bgHover+","+C.bg+")"}},
+      h("div",{style:{display:"flex",alignItems:"center",gap:12}},
+        h("div",{style:{width:34,height:34,borderRadius:7,background:"linear-gradient(135deg,"+C.cyan+","+C.purple+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}},"📊"),
+        h("div",null,h("div",{style:{fontSize:16,fontWeight:800}},"Qullamaggie Trading System"),h("div",{style:{fontSize:10,color:C.textDim}},"BREAKOUTS · EPISODIC PIVOTS · PARABOLIC SHORTS"))),
+      h("div",{style:{fontFamily:mono,fontSize:12,color:C.textDim}},time.toLocaleTimeString())),
+    h("div",{style:{display:"flex",gap:2,padding:"10px 24px",borderBottom:"1px solid "+C.border}},
+      TABS.map(function(t){return h("button",{key:t.id,onClick:function(){setTab(t.id)},style:{padding:"9px 16px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:sans,display:"flex",alignItems:"center",gap:7,background:tab===t.id?C.accentGlow:"transparent",color:tab===t.id?C.accent:C.textDim}},h("span",null,t.i),h("span",null,t.n),tab===t.id?h("span",{style:{fontSize:10,color:C.textMuted}},"· "+t.d):null)})),
+    h("div",{style:{padding:"20px 24px",maxWidth:1100,margin:"0 auto"}},
+      tab==="scanner"?h(Scanner):tab==="planner"?h(Planner):h(Study)),
+    h("div",{style:{padding:"10px 24px",borderTop:"1px solid "+C.border,textAlign:"center",color:C.textMuted,fontSize:10}},"Based on Qullamaggie's public teachings · Not financial advice"))
+}
+
+ReactDOM.render(h(App),document.getElementById("root"));
+</script>
+</body>
+</html>
