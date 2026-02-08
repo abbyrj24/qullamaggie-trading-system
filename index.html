@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qullamaggie Trading System</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #06090f; font-family: 'Outfit', sans-serif; }
+    input, select, textarea, button { font-family: inherit; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #21262d; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.15.0/Recharts.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+    const { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart, ReferenceLine } = Recharts;
+
+    // ═══════════════════════════════════════════════════════
+    // QULLAMAGGIE SWING TRADING COMMAND CENTER
+    // ═══════════════════════════════════════════════════════
+
+    const C = {
+      bg: "#06090f", bgCard: "#0d1117", bgHover: "#161b22", bgElevated: "#1c2333",
+      border: "#21262d", borderFocus: "#58a6ff",
+      text: "#e6edf3", textDim: "#7d8590", textMuted: "#484f58",
+      accent: "#58a6ff", accentGlow: "rgba(88, 166, 255, 0.12)",
+      green: "#3fb950", greenDim: "rgba(63, 185, 80, 0.15)",
+      red: "#f85149", redDim: "rgba(248, 81, 73, 0.12)",
+      amber: "#d29922", amberDim: "rgba(210, 153, 34, 0.12)",
+      purple: "#bc8cff", purpleDim: "rgba(188, 140, 255, 0.12)",
+      cyan: "#39d2c0", cyanDim: "rgba(57, 210, 192, 0.12)",
+      orange: "#f0883e",
+    };
+
+    const mono = "'JetBrains Mono', 'Fira Code', monospace";
+    const sans = "'Outfit', 'DM Sans', sans-serif";
+
+    // localStorage-based storage for GitHub Pages
+    const storage = {
+      async get(key) { try { const v = localStorage.getItem("qm_" + key); return v ? JSON.parse(v) : null; } catch { return null; } },
+      async set(key, value) { try { localStorage.setItem("qm_" + key, JSON.stringify(value)); } catch (e) { console.error(e); } }
+    };
+
+    // API key management
+    function getApiKey() { return localStorage.getItem("qm_anthropic_api_key") || ""; }
+    function setApiKey(key) { localStorage.setItem("qm_anthropic_api_key", key); }
+
+    const inputStyle = {
+      padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`,
+      borderRadius: 6, color: C.text, fontSize: 13, outline: "none", width: "100%",
+      boxSizing: "border-box", fontFamily: mono,
+    };
+    const labelStyle = { color: C.textDim, fontSize: 10, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 };
+
+    function Badge({ children, color }) {
+      return (
+        <span style={{
+          padding: "3px 10px", borderRadius: 5, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+          background: color + "22", color: color, textTransform: "uppercase",
+        }}>{children}</span>
+      );
+    }
+
+    function Stat({ label, value, color = C.text, small }) {
+      return (
+        <div style={{ padding: small ? 10 : 14, background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}`, textAlign: "center" }}>
+          <div style={{ color: C.textDim, fontSize: 9, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{label}</div>
+          <div style={{ color, fontSize: small ? 15 : 19, fontWeight: 800, fontFamily: mono }}>{value}</div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // API KEY SETUP MODAL
+    // ═══════════════════════════════════════════════════════
+    function ApiKeySetup({ onSave }) {
+      const [key, setKey] = useState(getApiKey());
+      return (
+        <div style={{ padding: 24, background: C.bgCard, borderRadius: 12, border: `1px solid ${C.accent}33`, maxWidth: 500, margin: "40px auto" }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 6 }}>🔑 API Key Required</div>
+          <div style={{ color: C.textDim, fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
+            The AI Scanner needs your Anthropic API key to analyze stocks. Your key is stored locally in your browser only — never sent anywhere except Anthropic's API.
+          </div>
+          <div style={labelStyle}>Anthropic API Key</div>
+          <input
+            type="password" value={key} onChange={e => setKey(e.target.value)}
+            placeholder="sk-ant-api03-..."
+            style={{ ...inputStyle, fontSize: 14, padding: "12px 14px", marginBottom: 12 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setApiKey(key); onSave(); }} disabled={!key.startsWith("sk-")} style={{
+              padding: "10px 24px", background: key.startsWith("sk-") ? C.accent : C.bgHover,
+              border: "none", borderRadius: 6, color: "#fff", fontSize: 14,
+              fontWeight: 600, cursor: key.startsWith("sk-") ? "pointer" : "not-allowed",
+            }}>Save & Continue</button>
+          </div>
+          <div style={{ color: C.textMuted, fontSize: 11, marginTop: 12 }}>
+            Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style={{ color: C.accent }}>console.anthropic.com</a>.
+            Other tabs work without a key.
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TAB 1: AI SCANNER
+    // ═══════════════════════════════════════════════════════
+    function SetupScanner() {
+      const [ticker, setTicker] = useState("");
+      const [analysis, setAnalysis] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState("");
+      const [history, setHistory] = useState([]);
+      const [needsKey, setNeedsKey] = useState(!getApiKey());
+
+      useEffect(() => { storage.get("scanner-history").then(h => h && setHistory(h)); }, []);
+
+      if (needsKey) return <ApiKeySetup onSave={() => setNeedsKey(false)} />;
+
+      const analyze = async () => {
+        if (!ticker.trim()) return;
+        const apiKey = getApiKey();
+        if (!apiKey) { setNeedsKey(true); return; }
+        setLoading(true); setError(""); setAnalysis(null);
+        try {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 1000,
+              system: `You are a Qullamaggie-style swing trading analysis API. You evaluate stocks using Kristjan Kullamägi's exact methodology: Breakout setups (HTF patterns), Episodic Pivots (EP), and Parabolic Shorts. You MUST respond with ONLY a single valid JSON object. No explanation, no markdown, no text before or after the JSON. Just raw JSON starting with { and ending with }.`,
+              messages: [{
+                role: "user",
+                content: `Analyze ${ticker.toUpperCase()} using Qullamaggie's swing trading methodology. Return ONLY this JSON:
+
+{"ticker":"${ticker.toUpperCase()}","company":"name","price":"current price","change_pct":"% change","adr_pct":"estimated avg daily range %","relative_strength":"description vs SPY","setup_type":"BREAKOUT|EP|PARABOLIC_SHORT|NO_SETUP","setup_quality":7,"summary":"2-3 sentences on current chart structure using Qullamaggie terminology","consolidation_quality":"tight/loose/none - describe if price is surfing 10/20 EMA","volume_profile":"describe recent volume pattern","prior_move_pct":"% gain in prior advance","consolidation_days":"days in current base","ema10_position":"above/below/at","ema20_position":"above/below/at","ema50_position":"above/below/at","breakout_level":"pivot price","stop_level":"stop price","risk_pct":"% risk entry to stop","catalysts":["catalyst 1","catalyst 2"],"bull_case":["point1","point2","point3"],"bear_case":["point1","point2","point3"],"qm_checklist":{"prior_move_30pct":true,"orderly_consolidation":true,"surfing_10_20_ema":true,"tightening_range":true,"volume_contraction":true,"above_50_ema":true},"recommendation":"READY|WATCH|AVOID","timeframe":"hold period"}`
+              }],
+              tools: [{ type: "web_search_20250305", name: "web_search" }]
+            })
+          });
+          const data = await response.json();
+          if (!data || data.error) throw new Error(data?.error?.message || "API error");
+          if (!data.content || !Array.isArray(data.content)) throw new Error("Unexpected response format");
+          const text = data.content.filter(i => i.type === "text" && i.text).map(i => i.text).join("\n");
+          if (!text) throw new Error("No text in response");
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error("No JSON found in response");
+          const parsed = JSON.parse(jsonMatch[0].replace(/```json|```/g, "").trim());
+          setAnalysis(parsed);
+          const newHist = [{ ...parsed, date: new Date().toISOString() }, ...history].slice(0, 20);
+          setHistory(newHist); storage.set("scanner-history", newHist);
+        } catch (e) {
+          if (e.message && e.message.includes("api_key")) { setNeedsKey(true); return; }
+          setError("Analysis failed: " + e.message);
+        }
+        setLoading(false);
+      };
+
+      const qualColor = (q) => q >= 8 ? C.green : q >= 5 ? C.amber : C.red;
+      const recColor = (r) => ({ READY: C.green, WATCH: C.amber, AVOID: C.red }[r] || C.textDim);
+      const setupColor = (s) => ({ BREAKOUT: C.cyan, EP: C.purple, PARABOLIC_SHORT: C.orange, NO_SETUP: C.textMuted }[s] || C.textDim);
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", gap: 12 }}>
+            <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === "Enter" && analyze()}
+              placeholder="Enter ticker — e.g. NVDA, PLTR, SMCI"
+              style={{ ...inputStyle, flex: 1, fontSize: 15, padding: "14px 18px" }} />
+            <button onClick={analyze} disabled={loading} style={{
+              padding: "14px 28px", background: loading ? C.bgHover : C.accent,
+              border: "none", borderRadius: 8, color: "#fff", fontSize: 14,
+              fontWeight: 700, cursor: loading ? "wait" : "pointer", fontFamily: sans,
+              boxShadow: loading ? "none" : `0 0 24px ${C.accentGlow}`, whiteSpace: "nowrap",
+            }}>{loading ? "⟳ Scanning..." : "⚡ Scan Setup"}</button>
+            <button onClick={() => setNeedsKey(true)} title="Change API Key" style={{
+              padding: "14px", background: "transparent", border: `1px solid ${C.border}`,
+              borderRadius: 8, color: C.textDim, cursor: "pointer", fontSize: 14,
+            }}>🔑</button>
+          </div>
+
+          {error && <div style={{ padding: 12, background: C.redDim, borderRadius: 6, color: C.red, fontSize: 13 }}>{error}</div>}
+
+          {analysis && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* Header */}
+              <div style={{ padding: 20, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, fontFamily: mono, color: C.text }}>{analysis.ticker}</span>
+                    <Badge color={setupColor(analysis.setup_type)}>{(analysis.setup_type || "").replace("_", " ")}</Badge>
+                    <Badge color={recColor(analysis.recommendation)}>{analysis.recommendation}</Badge>
+                  </div>
+                  <div style={{ color: C.textDim, fontSize: 13 }}>{analysis.company}</div>
+                  <div style={{ display: "flex", gap: 16, marginTop: 6, flexWrap: "wrap" }}>
+                    {[
+                      { l: "Price", v: analysis.price, c: C.text },
+                      { l: "Chg", v: analysis.change_pct, c: String(analysis.change_pct || "").includes("-") ? C.red : C.green },
+                      { l: "ADR", v: analysis.adr_pct, c: C.amber },
+                      { l: "Risk", v: analysis.risk_pct, c: C.red },
+                    ].map((d, i) => (
+                      <span key={i} style={{ fontSize: 12, color: C.textDim }}>
+                        {d.l}: <span style={{ color: d.c, fontFamily: mono, fontWeight: 600 }}>{d.v}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 9, color: C.textDim, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Setup Quality</div>
+                  <div style={{
+                    width: 60, height: 60, borderRadius: "50%", border: `3px solid ${qualColor(analysis.setup_quality)}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 22, fontWeight: 800, color: qualColor(analysis.setup_quality), fontFamily: mono,
+                    boxShadow: `0 0 20px ${qualColor(analysis.setup_quality)}22`,
+                  }}>{analysis.setup_quality}</div>
+                </div>
+              </div>
+
+              {/* QM Checklist */}
+              <div style={{ padding: 18, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ color: C.cyan, fontSize: 13, fontWeight: 700 }}>📋 Qullamaggie Setup Checklist</div>
+                  <div style={{ color: C.textDim, fontSize: 12 }}>
+                    {Object.values(analysis.qm_checklist || {}).filter(Boolean).length}/{Object.keys(analysis.qm_checklist || {}).length} passed
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {[
+                    { key: "prior_move_30pct", label: "Prior move 30-100%+ (momentum established)" },
+                    { key: "orderly_consolidation", label: "Orderly pullback / consolidation (2-8 weeks)" },
+                    { key: "surfing_10_20_ema", label: "Price surfing rising 10 & 20 EMA" },
+                    { key: "tightening_range", label: "Tightening range with higher lows" },
+                    { key: "volume_contraction", label: "Volume contracting during consolidation" },
+                    { key: "above_50_ema", label: "Trading above 50 EMA" },
+                  ].map(item => {
+                    const passed = analysis.qm_checklist?.[item.key];
+                    return (
+                      <div key={item.key} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+                        background: passed ? C.greenDim : C.redDim, borderRadius: 5,
+                      }}>
+                        <span style={{ fontSize: 14, flexShrink: 0 }}>{passed ? "✅" : "❌"}</span>
+                        <span style={{ color: passed ? C.green : C.red, fontSize: 12 }}>{item.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Key Levels & Structure */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={labelStyle}>EMA Position</div>
+                  {[
+                    { label: "10 EMA", value: analysis.ema10_position, color: analysis.ema10_position === "above" ? C.green : C.red },
+                    { label: "20 EMA", value: analysis.ema20_position, color: analysis.ema20_position === "above" ? C.green : C.red },
+                    { label: "50 EMA", value: analysis.ema50_position, color: analysis.ema50_position === "above" ? C.green : C.red },
+                  ].map((d, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                      <span style={{ color: C.textDim, fontSize: 12 }}>{d.label}</span>
+                      <span style={{ color: d.color, fontFamily: mono, fontSize: 13, fontWeight: 600, textTransform: "uppercase" }}>{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={labelStyle}>Trade Levels</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Breakout Pivot</span>
+                    <span style={{ color: C.cyan, fontFamily: mono, fontSize: 14, fontWeight: 700 }}>{analysis.breakout_level}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Stop (LOD/Base)</span>
+                    <span style={{ color: C.red, fontFamily: mono, fontSize: 14, fontWeight: 700 }}>{analysis.stop_level}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Timeframe</span>
+                    <span style={{ color: C.text, fontSize: 13 }}>{analysis.timeframe}</span>
+                  </div>
+                </div>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={labelStyle}>Base Structure</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Prior Move</span>
+                    <span style={{ color: C.green, fontFamily: mono, fontSize: 13, fontWeight: 600 }}>{analysis.prior_move_pct}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Consol. Days</span>
+                    <span style={{ color: C.text, fontFamily: mono, fontSize: 13 }}>{analysis.consolidation_days}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    <span style={{ color: C.textDim, fontSize: 12 }}>Tightness</span>
+                    <span style={{ color: C.amber, fontSize: 13 }}>{analysis.consolidation_quality}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary + Volume */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ ...labelStyle, marginBottom: 8 }}>Chart Structure</div>
+                  <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7 }}>{analysis.summary}</div>
+                </div>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ ...labelStyle, marginBottom: 8 }}>Volume Profile</div>
+                  <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7 }}>{analysis.volume_profile}</div>
+                  <div style={{ color: C.text, fontSize: 13, lineHeight: 1.7, marginTop: 8 }}>
+                    <span style={{ color: C.textDim }}>RS:</span> {analysis.relative_strength}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bull/Bear */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ color: C.green, fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🐂 Bull Case</div>
+                  {(analysis.bull_case || []).map((p, i) => (
+                    <div key={i} style={{ color: C.text, fontSize: 12, lineHeight: 1.6, marginBottom: 6, paddingLeft: 10, borderLeft: `2px solid ${C.green}33` }}>{p}</div>
+                  ))}
+                </div>
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ color: C.red, fontSize: 13, fontWeight: 700, marginBottom: 10 }}>🐻 Bear Case</div>
+                  {(analysis.bear_case || []).map((p, i) => (
+                    <div key={i} style={{ color: C.text, fontSize: 12, lineHeight: 1.6, marginBottom: 6, paddingLeft: 10, borderLeft: `2px solid ${C.red}33` }}>{p}</div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Catalysts */}
+              {(analysis.catalysts || []).length > 0 && (
+                <div style={{ padding: 14, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={{ ...labelStyle, marginBottom: 8 }}>Upcoming Catalysts</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {analysis.catalysts.map((c, i) => (
+                      <span key={i} style={{ padding: "5px 12px", background: C.amberDim, borderRadius: 5, color: C.amber, fontSize: 12 }}>◆ {c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* History */}
+          {history.length > 0 && !analysis && (
+            <div>
+              <div style={labelStyle}>Recent Scans</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                {history.map((h, i) => (
+                  <div key={i} onClick={() => { setTicker(h.ticker); setAnalysis(h); }} style={{
+                    padding: "10px 14px", background: C.bgCard, borderRadius: 6,
+                    border: `1px solid ${C.border}`, display: "flex",
+                    justifyContent: "space-between", alignItems: "center", cursor: "pointer",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontFamily: mono, fontWeight: 700, color: C.text }}>{h.ticker}</span>
+                      <Badge color={setupColor(h.setup_type)}>{(h.setup_type || "").replace("_", " ")}</Badge>
+                      <Badge color={recColor(h.recommendation)}>{h.recommendation}</Badge>
+                    </div>
+                    <span style={{ color: qualColor(h.setup_quality), fontFamily: mono, fontSize: 14 }}>{h.setup_quality}/10</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!analysis && history.length === 0 && (
+            <div style={{ textAlign: "center", padding: 50, color: C.textDim }}>
+              <div style={{ fontSize: 44, marginBottom: 14 }}>🔍</div>
+              <div style={{ fontSize: 15, marginBottom: 4 }}>AI Setup Scanner — Qullamaggie Style</div>
+              <div style={{ fontSize: 12, color: C.textMuted }}>Grades stocks against Kristjan's exact checklist: HTF breakouts, EPs, parabolic shorts</div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TAB 2: TRADE PLANNER
+    // ═══════════════════════════════════════════════════════
+    function TradePlanner() {
+      const [acct, setAcct] = useState(25000);
+      const [riskPct, setRiskPct] = useState(0.5);
+      const [entry, setEntry] = useState("");
+      const [stop, setStop] = useState("");
+      const [adr, setAdr] = useState("");
+      const [setupType, setSetupType] = useState("BREAKOUT");
+
+      const entryF = parseFloat(entry) || 0;
+      const stopF = parseFloat(stop) || 0;
+      const adrF = parseFloat(adr) || 0;
+      const riskAmt = acct * (riskPct / 100);
+      const riskPerShare = entryF && stopF ? Math.abs(entryF - stopF) : 0;
+      const stopWidthPct = entryF > 0 ? (riskPerShare / entryF * 100) : 0;
+      const stopVsAdr = adrF > 0 ? (stopWidthPct / adrF * 100).toFixed(0) : "—";
+      const posSize = riskPerShare > 0 ? Math.floor(riskAmt / riskPerShare) : 0;
+      const totalCost = posSize * entryF;
+      const positionPct = acct > 0 ? (totalCost / acct * 100).toFixed(1) : 0;
+      const target1R = entryF + riskPerShare;
+      const target2R = entryF + riskPerShare * 2;
+      const target3R = entryF + riskPerShare * 3;
+      const stopValid = adrF > 0 ? stopWidthPct <= adrF : true;
+
+      const QM_RULES = {
+        BREAKOUT: [
+          "Entry: Break above consolidation high / Opening Range High",
+          "Stop: Low of entry day (must be ≤ ADR% wide)",
+          "Sell ⅓ to ½ after 3-5 days into strength",
+          "Move stop to break-even after partial sell",
+          "Trail remaining position with 10 or 20 EMA",
+          "Exit on close below 10 EMA (aggressive) or 20 EMA (standard)",
+          "Winners can run 10-20x initial risk if you let them",
+        ],
+        EP: [
+          "Entry: Break of 1-min or 5-min opening range high",
+          "Only enter if gap up ≥10% on heavy volume",
+          "Stock should be flat/neglected prior 3-6 months",
+          "Stop: Low of opening range / morning low",
+          "Stop must not exceed ADR%",
+          "Trail with 10/20 EMA — these can run for weeks/months",
+          "Volume is KEY — no volume, no trade",
+        ],
+        PARABOLIC_SHORT: [
+          "Wait for clear sign of fatigue after vertical move",
+          "Short on first clear break lower after fatigue",
+          "Stop: Just above the day's high — keep it tight",
+          "Cover into first pullback toward 10/20 EMA",
+          "Can also go LONG the bounce off collapse",
+          "If long the bounce: sell into first fast push",
+          "Never turn a trade into an investment",
+        ],
+      };
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            {[
+              { id: "BREAKOUT", icon: "📈", name: "Breakout / HTF", desc: "Staircase continuation" },
+              { id: "EP", icon: "⚡", name: "Episodic Pivot", desc: "Earnings/news gap" },
+              { id: "PARABOLIC_SHORT", icon: "🔻", name: "Parabolic Short", desc: "Overextended reversal" },
+            ].map(s => (
+              <div key={s.id} onClick={() => setSetupType(s.id)} style={{
+                padding: 14, background: setupType === s.id ? C.accentGlow : C.bgCard,
+                borderRadius: 8, border: `1px solid ${setupType === s.id ? C.accent : C.border}`,
+                cursor: "pointer", transition: "all 0.15s",
+              }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ color: setupType === s.id ? C.accent : C.text, fontWeight: 700, fontSize: 13 }}>{s.name}</div>
+                <div style={{ color: C.textDim, fontSize: 11 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: 18, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Account & Risk</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div><div style={labelStyle}>Account Size</div><input type="number" value={acct} onChange={e => setAcct(parseFloat(e.target.value) || 0)} style={inputStyle} /></div>
+                  <div>
+                    <div style={labelStyle}>Risk % Per Trade</div>
+                    <input type="number" value={riskPct} onChange={e => setRiskPct(parseFloat(e.target.value) || 0)} style={inputStyle} step="0.25" />
+                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                      {[0.25, 0.5, 0.75, 1.0, 1.5].map(v => (
+                        <button key={v} onClick={() => setRiskPct(v)} style={{
+                          padding: "3px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+                          background: riskPct === v ? C.accent : "transparent",
+                          border: `1px solid ${riskPct === v ? C.accent : C.border}`,
+                          color: riskPct === v ? "#fff" : C.textDim,
+                        }}>{v}%</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ padding: 18, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Trade Setup</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                  <div><div style={labelStyle}>Entry Price</div><input type="number" value={entry} onChange={e => setEntry(e.target.value)} style={inputStyle} placeholder="0.00" /></div>
+                  <div><div style={labelStyle}>Stop (LOD)</div><input type="number" value={stop} onChange={e => setStop(e.target.value)} style={{ ...inputStyle, borderColor: stop ? C.red + "66" : C.border }} placeholder="0.00" /></div>
+                  <div><div style={labelStyle}>ADR %</div><input type="number" value={adr} onChange={e => setAdr(e.target.value)} style={inputStyle} placeholder="5.0" step="0.5" /></div>
+                </div>
+                {entryF > 0 && stopF > 0 && !stopValid && (
+                  <div style={{ marginTop: 10, padding: "8px 12px", background: C.redDim, borderRadius: 6, color: C.red, fontSize: 12 }}>
+                    ⚠️ Stop width ({stopWidthPct.toFixed(1)}%) exceeds ADR ({adrF}%) — Qullamaggie says stop should NOT be wider than ADR
+                  </div>
+                )}
+              </div>
+              {entryF > 0 && stopF > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                  <Stat label="Position Size" value={`${posSize} sh`} color={C.accent} small />
+                  <Stat label="$ at Risk" value={`$${riskAmt.toFixed(0)}`} color={C.red} small />
+                  <Stat label="Total Cost" value={`$${totalCost.toFixed(0)}`} color={C.text} small />
+                  <Stat label="Stop Width" value={`${stopWidthPct.toFixed(1)}%`} color={stopValid ? C.green : C.red} small />
+                  <Stat label="vs ADR" value={`${stopVsAdr}%`} color={C.amber} small />
+                  <Stat label="Portfolio %" value={`${positionPct}%`} color={parseFloat(positionPct) > 25 ? C.red : C.text} small />
+                </div>
+              )}
+              {entryF > 0 && stopF > 0 && (
+                <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div style={labelStyle}>R-Multiple Targets</div>
+                  <div style={{ marginTop: 8 }}>
+                    {[
+                      { label: "1R (sell ⅓-½ here)", price: target1R, r: "1R", color: C.amber },
+                      { label: "2R", price: target2R, r: "2R", color: C.green },
+                      { label: "3R (trail with EMA)", price: target3R, r: "3R", color: C.cyan },
+                    ].map((t, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Badge color={t.color}>{t.r}</Badge>
+                          <span style={{ color: C.textDim, fontSize: 12 }}>{t.label}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontFamily: mono, color: C.text, fontSize: 14, fontWeight: 600 }}>${t.price.toFixed(2)}</span>
+                          <span style={{ color: C.green, fontSize: 12, fontFamily: mono }}>+${(t.price - entryF).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 10, color: C.textDim, fontSize: 11, fontStyle: "italic" }}>
+                    QM avg win rate: ~25-35% — but winners run 10-20x risk. That's the edge.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* QM Rules Panel */}
+            <div style={{ padding: 18, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+              <div style={{ color: C.cyan, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                📜 Qullamaggie's {setupType.replace("_", " ")} Rules
+              </div>
+              <div style={{ color: C.textDim, fontSize: 11, marginBottom: 14 }}>Follow these religiously</div>
+              {QM_RULES[setupType].map((rule, i) => (
+                <div key={i} style={{
+                  padding: "10px 12px", marginBottom: 6, borderRadius: 6,
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  color: C.text, fontSize: 12, lineHeight: 1.5,
+                  display: "flex", gap: 10, alignItems: "flex-start",
+                }}>
+                  <span style={{ color: C.cyan, fontFamily: mono, fontSize: 11, flexShrink: 0, marginTop: 1 }}>{String(i + 1).padStart(2, "0")}</span>
+                  {rule}
+                </div>
+              ))}
+              <div style={{ marginTop: 16, padding: 14, background: C.purpleDim, borderRadius: 8, border: `1px solid ${C.purple}33` }}>
+                <div style={{ color: C.purple, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>💡 Core Formula</div>
+                <div style={{ fontFamily: mono, color: C.text, fontSize: 12, marginBottom: 6 }}>Position Size = Risk $ / (Entry − Stop)</div>
+                <div style={{ color: C.textDim, fontSize: 11, lineHeight: 1.6 }}>
+                  "It's not about how often you win. It's about how much you make when you win vs how much you lose when you don't."
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TAB 3: JOURNAL
+    // ═══════════════════════════════════════════════════════
+    function Journal() {
+      const [trades, setTrades] = useState([]);
+      const [showForm, setShowForm] = useState(false);
+      const [form, setForm] = useState({
+        ticker: "", setup: "BREAKOUT", entry: "", stop: "", exit: "", shares: "",
+        entryDate: new Date().toISOString().split("T")[0], exitDate: "", notes: "", status: "OPEN",
+      });
+
+      useEffect(() => { storage.get("journal").then(t => t && setTrades(t)); }, []);
+      const save = (t) => { setTrades(t); storage.set("journal", t); };
+
+      const addTrade = () => {
+        const e = parseFloat(form.entry), s = parseFloat(form.stop), x = form.exit ? parseFloat(form.exit) : null;
+        const sh = parseInt(form.shares) || 1;
+        const riskPerShare = Math.abs(e - s);
+        const pnl = x ? (x - e) * sh : null;
+        const rMultiple = pnl !== null && riskPerShare > 0 ? parseFloat(((x - e) / riskPerShare).toFixed(2)) : null;
+        const newTrade = { ...form, id: Date.now(), entry: e, stop: s, exit: x, shares: sh, pnl, rMultiple, riskPerShare, status: x ? "CLOSED" : "OPEN" };
+        save([newTrade, ...trades]);
+        setForm({ ticker: "", setup: "BREAKOUT", entry: "", stop: "", exit: "", shares: "", entryDate: new Date().toISOString().split("T")[0], exitDate: "", notes: "", status: "OPEN" });
+        setShowForm(false);
+      };
+
+      const closeTrade = (id, exitPrice) => {
+        save(trades.map(t => {
+          if (t.id !== id) return t;
+          const x = parseFloat(exitPrice), pnl = (x - t.entry) * t.shares;
+          const rMul = t.riskPerShare > 0 ? parseFloat(((x - t.entry) / t.riskPerShare).toFixed(2)) : 0;
+          return { ...t, exit: x, pnl, rMultiple: rMul, status: "CLOSED", exitDate: new Date().toISOString().split("T")[0] };
+        }));
+      };
+
+      const deleteTrade = (id) => save(trades.filter(t => t.id !== id));
+
+      const closed = trades.filter(t => t.status === "CLOSED");
+      const totalPnL = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+      const winRate = closed.length > 0 ? (closed.filter(t => t.pnl > 0).length / closed.length * 100).toFixed(1) : "0";
+      const avgR = closed.length > 0 ? (closed.reduce((s, t) => s + (t.rMultiple || 0), 0) / closed.length).toFixed(2) : "0";
+      const bestR = closed.length > 0 ? Math.max(...closed.map(t => t.rMultiple || 0)).toFixed(1) : "0";
+
+      const eqCurve = [];
+      let cumR = 0;
+      [...closed].reverse().forEach((t, i) => { cumR += t.rMultiple || 0; eqCurve.push({ trade: i + 1, r: parseFloat(cumR.toFixed(2)) }); });
+
+      const rDist = {};
+      closed.forEach(t => {
+        const b = t.rMultiple >= 5 ? "5R+" : t.rMultiple >= 3 ? "3-5R" : t.rMultiple >= 1 ? "1-3R" : t.rMultiple >= 0 ? "0-1R" : t.rMultiple >= -1 ? "-1-0R" : "<-1R";
+        rDist[b] = (rDist[b] || 0) + 1;
+      });
+      const rDistData = ["<-1R", "-1-0R", "0-1R", "1-3R", "3-5R", "5R+"].map(b => ({ name: b, count: rDist[b] || 0 }));
+      const rDistColors = [C.red, C.red, C.amber, C.green, C.cyan, C.purple];
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+            <Stat label="Total P&L" value={`$${totalPnL.toFixed(0)}`} color={totalPnL >= 0 ? C.green : C.red} small />
+            <Stat label="Win Rate" value={`${winRate}%`} color={parseFloat(winRate) >= 30 ? C.green : C.red} small />
+            <Stat label="Avg R" value={`${avgR}R`} color={parseFloat(avgR) > 0 ? C.green : C.red} small />
+            <Stat label="Best R" value={`${bestR}R`} color={C.cyan} small />
+            <Stat label="Trades" value={trades.length} color={C.accent} small />
+          </div>
+
+          {closed.length > 1 && (
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
+              <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={labelStyle}>Equity Curve (R-Multiples)</div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={eqCurve}>
+                    <defs><linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={cumR >= 0 ? C.green : C.red} stopOpacity={0.3} /><stop offset="100%" stopColor={cumR >= 0 ? C.green : C.red} stopOpacity={0} /></linearGradient></defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="trade" stroke={C.textMuted} fontSize={10} />
+                    <YAxis stroke={C.textMuted} fontSize={10} tickFormatter={v => `${v}R`} />
+                    <Tooltip contentStyle={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11 }} />
+                    <ReferenceLine y={0} stroke={C.textMuted} strokeDasharray="3 3" />
+                    <Area type="monotone" dataKey="r" stroke={cumR >= 0 ? C.green : C.red} fill="url(#rGrad)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={labelStyle}>R-Distribution</div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={rDistData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
+                    <XAxis dataKey="name" stroke={C.textMuted} fontSize={9} />
+                    <YAxis stroke={C.textMuted} fontSize={10} />
+                    <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                      {rDistData.map((_, i) => <Cell key={i} fill={rDistColors[i]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {!showForm && (
+            <button onClick={() => setShowForm(true)} style={{
+              padding: 12, background: "transparent", border: `2px dashed ${C.border}`,
+              borderRadius: 8, color: C.accent, fontSize: 13, cursor: "pointer", fontFamily: sans, fontWeight: 600,
+            }}>+ Log Trade</button>
+          )}
+
+          {showForm && (
+            <div style={{ padding: 18, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.accent}33` }}>
+              <div style={{ color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Log Trade</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                <div><div style={labelStyle}>Ticker</div><input value={form.ticker} onChange={e => setForm({...form, ticker: e.target.value.toUpperCase()})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Setup</div>
+                  <select value={form.setup} onChange={e => setForm({...form, setup: e.target.value})} style={inputStyle}>
+                    <option value="BREAKOUT">Breakout / HTF</option><option value="EP">Episodic Pivot</option><option value="PARABOLIC_SHORT">Parabolic Short</option>
+                  </select>
+                </div>
+                <div><div style={labelStyle}>Entry $</div><input type="number" value={form.entry} onChange={e => setForm({...form, entry: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Stop (LOD)</div><input type="number" value={form.stop} onChange={e => setForm({...form, stop: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Exit $</div><input type="number" value={form.exit} onChange={e => setForm({...form, exit: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Shares</div><input type="number" value={form.shares} onChange={e => setForm({...form, shares: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Entry Date</div><input type="date" value={form.entryDate} onChange={e => setForm({...form, entryDate: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Exit Date</div><input type="date" value={form.exitDate} onChange={e => setForm({...form, exitDate: e.target.value})} style={inputStyle} /></div>
+              </div>
+              <div style={{ marginTop: 10 }}><div style={labelStyle}>Notes</div>
+                <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} style={{ ...inputStyle, minHeight: 50, resize: "vertical", fontFamily: sans }} />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={addTrade} style={{ padding: "10px 22px", background: C.accent, border: "none", borderRadius: 6, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                <button onClick={() => setShowForm(false)} style={{ padding: "10px 22px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textDim, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {trades.map(t => (
+            <div key={t.id} style={{
+              padding: 12, background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}`,
+              borderLeft: `3px solid ${t.status === "OPEN" ? C.accent : (t.pnl >= 0 ? C.green : C.red)}`,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontFamily: mono, fontWeight: 700, color: C.text, fontSize: 14 }}>{t.ticker}</span>
+                  <Badge color={t.setup === "BREAKOUT" ? C.cyan : t.setup === "EP" ? C.purple : C.orange}>{t.setup}</Badge>
+                  <span style={{ fontSize: 11, color: C.textDim }}>{t.shares}sh @ ${t.entry}</span>
+                  {t.status === "OPEN" && <Badge color={C.accent}>OPEN</Badge>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {t.status === "CLOSED" && (
+                    <React.Fragment>
+                      <span style={{ color: t.pnl >= 0 ? C.green : C.red, fontFamily: mono, fontWeight: 700, fontSize: 13 }}>
+                        {t.pnl >= 0 ? "+" : ""}${t.pnl?.toFixed(2)}
+                      </span>
+                      <Badge color={t.rMultiple >= 0 ? C.green : C.red}>{t.rMultiple >= 0 ? "+" : ""}{t.rMultiple}R</Badge>
+                    </React.Fragment>
+                  )}
+                  {t.status === "OPEN" && (
+                    <button onClick={() => { const p = prompt("Exit price:"); if (p) closeTrade(t.id, p); }} style={{ padding: "4px 10px", background: C.accent, border: "none", borderRadius: 5, color: "#fff", fontSize: 11, cursor: "pointer" }}>Close</button>
+                  )}
+                  <button onClick={() => deleteTrade(t.id)} style={{ padding: "4px 7px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 4, color: C.textMuted, fontSize: 10, cursor: "pointer" }}>✕</button>
+                </div>
+              </div>
+              {t.notes && <div style={{ marginTop: 6, color: C.textDim, fontSize: 11, fontStyle: "italic" }}>{t.notes}</div>}
+            </div>
+          ))}
+
+          {trades.length === 0 && !showForm && (
+            <div style={{ textAlign: "center", padding: 44, color: C.textDim }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📓</div>
+              <div style={{ fontSize: 14 }}>Log trades in R-multiples — the Qullamaggie way</div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TAB 4: STUDY LAB
+    // ═══════════════════════════════════════════════════════
+    function StudyLab() {
+      const [studies, setStudies] = useState([]);
+      const [showForm, setShowForm] = useState(false);
+      const [form, setForm] = useState({ ticker: "", setup: "BREAKOUT", priorMove: "", consolDays: "", outcome: "", lessons: "" });
+
+      useEffect(() => { storage.get("studies").then(s => s && setStudies(s)); }, []);
+      const save = (s) => { setStudies(s); storage.set("studies", s); };
+
+      const addStudy = () => {
+        save([{ ...form, id: Date.now(), date: new Date().toISOString() }, ...studies]);
+        setForm({ ticker: "", setup: "BREAKOUT", priorMove: "", consolDays: "", outcome: "", lessons: "" });
+        setShowForm(false);
+      };
+
+      const QM_WISDOM = [
+        { quote: "Stocks move like staircases: step higher, sideways, step higher, sideways. Your job is to buy at the exact moment the next step is forming.", category: "Setup" },
+        { quote: "If you could only trade one setup, it should be the high-tight flag.", category: "HTF" },
+        { quote: "It's not about how often you win. It's about how much you make when you win vs how much you lose when you don't.", category: "Risk" },
+        { quote: "Stop should NOT be wider than the ATR/ADR of the stock.", category: "Stops" },
+        { quote: "Sell ⅓ to ½ after 3-5 days, move stop to break-even. Trail the rest with 10 or 20 EMA.", category: "Mgmt" },
+        { quote: "Scan for the top 1-2% of stocks up the most over 1-month, 3-month, 6-month.", category: "Scanning" },
+        { quote: "Spend THOUSANDS of hours looking at winning stocks over the past 100 years. No excuses, no shortcuts.", category: "Study" },
+        { quote: "When unexpected good news hits a neglected stock, that can trigger multi-month and multi-year moves.", category: "EP" },
+        { quote: "Turn off CNBC. They are not your friend.", category: "Psychology" },
+        { quote: "Win rate averages about 25%. The ones that work produce really big winners that more than make up for losses.", category: "Expectation" },
+        { quote: "As long as the stock is trading above 10 & 20 day MA, stay in. Only close when it trades below.", category: "Trail" },
+      ];
+      const [wisdomIdx, setWisdomIdx] = useState(0);
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{
+            padding: 20, background: `linear-gradient(135deg, ${C.purpleDim}, ${C.cyanDim})`,
+            borderRadius: 10, border: `1px solid ${C.purple}33`, cursor: "pointer",
+          }} onClick={() => setWisdomIdx((wisdomIdx + 1) % QM_WISDOM.length)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Badge color={C.purple}>{QM_WISDOM[wisdomIdx].category}</Badge>
+              <span style={{ color: C.textDim, fontSize: 11 }}>Click for next → {wisdomIdx + 1}/{QM_WISDOM.length}</span>
+            </div>
+            <div style={{ color: C.text, fontSize: 14, lineHeight: 1.7, fontStyle: "italic" }}>"{QM_WISDOM[wisdomIdx].quote}"</div>
+            <div style={{ color: C.purple, fontSize: 12, marginTop: 8, fontWeight: 600 }}>— Kristjan Kullamägi</div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            {[
+              { step: "01", title: "Build Master List", desc: "Scan top 1-2% performers over 1m, 3m, 6m." },
+              { step: "02", title: "Find Staircase Patterns", desc: "30-100%+ move → orderly 2-8 week pullback surfing 10/20 EMA." },
+              { step: "03", title: "Wait for Trigger", desc: "Breakout above consolidation. Stop at LOD ≤ ADR%. Trail with EMA." },
+            ].map(s => (
+              <div key={s.step} style={{ padding: 14, background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                <div style={{ color: C.cyan, fontFamily: mono, fontSize: 20, fontWeight: 800, marginBottom: 6 }}>{s.step}</div>
+                <div style={{ color: C.text, fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{s.title}</div>
+                <div style={{ color: C.textDim, fontSize: 11, lineHeight: 1.5 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            {[
+              { name: "Breakout / HTF", color: C.cyan, icon: "📈", rules: ["Prior move: 30-100%+", "Consolidation: 2-8 weeks", "Surfing 10/20 EMA", "Tightening range + vol dry-up", "Enter: Break of consol high", "Stop: LOD ≤ ADR%", "Trail: 10/20 EMA close"] },
+              { name: "Episodic Pivot", color: C.purple, icon: "⚡", rules: ["Gap ≥10% on earnings/news", "Heavy volume first 30 min", "Flat/neglected prior 3-6 months", "Enter: Break of 1m/5m ORH", "Stop: Morning low", "Can run weeks/months", "Volume is KEY"] },
+              { name: "Parabolic Short", color: C.orange, icon: "🔻", rules: ["Vertical move shows fatigue", "Short first clear break lower", "Stop: Above day's high", "Cover into 10/20 EMA pullback", "Can long bounce off collapse", "Sell bounce into first push", "Never turn trade into investment"] },
+            ].map(s => (
+              <div key={s.name} style={{ padding: 14, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 18 }}>{s.icon}</span>
+                  <span style={{ color: s.color, fontWeight: 700, fontSize: 13 }}>{s.name}</span>
+                </div>
+                {s.rules.map((r, i) => (
+                  <div key={i} style={{ color: C.textDim, fontSize: 11, lineHeight: 1.5, marginBottom: 3, paddingLeft: 8, borderLeft: `2px solid ${s.color}33` }}>{r}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ color: C.text, fontSize: 14, fontWeight: 700 }}>📚 Chart Study Database</div>
+            <button onClick={() => setShowForm(!showForm)} style={{ padding: "8px 16px", background: C.accent, border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add Study</button>
+          </div>
+
+          {showForm && (
+            <div style={{ padding: 16, background: C.bgCard, borderRadius: 10, border: `1px solid ${C.accent}33` }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                <div><div style={labelStyle}>Ticker</div><input value={form.ticker} onChange={e => setForm({...form, ticker: e.target.value.toUpperCase()})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Setup</div>
+                  <select value={form.setup} onChange={e => setForm({...form, setup: e.target.value})} style={inputStyle}>
+                    <option value="BREAKOUT">Breakout</option><option value="EP">EP</option><option value="PARABOLIC_SHORT">Parabolic Short</option>
+                  </select>
+                </div>
+                <div><div style={labelStyle}>Prior Move %</div><input value={form.priorMove} onChange={e => setForm({...form, priorMove: e.target.value})} style={inputStyle} /></div>
+                <div><div style={labelStyle}>Consol. Days</div><input value={form.consolDays} onChange={e => setForm({...form, consolDays: e.target.value})} style={inputStyle} /></div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+                <div><div style={labelStyle}>Outcome</div><textarea value={form.outcome} onChange={e => setForm({...form, outcome: e.target.value})} style={{ ...inputStyle, minHeight: 40, fontFamily: sans }} /></div>
+                <div><div style={labelStyle}>Lessons</div><textarea value={form.lessons} onChange={e => setForm({...form, lessons: e.target.value})} style={{ ...inputStyle, minHeight: 40, fontFamily: sans }} /></div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={addStudy} style={{ padding: "8px 18px", background: C.accent, border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                <button onClick={() => setShowForm(false)} style={{ padding: "8px 18px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: C.textDim, fontSize: 12, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {studies.map(s => (
+            <div key={s.id} style={{ padding: 12, background: C.bgCard, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontFamily: mono, fontWeight: 700, color: C.text }}>{s.ticker}</span>
+                <Badge color={s.setup === "BREAKOUT" ? C.cyan : s.setup === "EP" ? C.purple : C.orange}>{s.setup}</Badge>
+                {s.priorMove && <span style={{ color: C.textDim, fontSize: 11 }}>Prior: {s.priorMove}%</span>}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => save(studies.filter(x => x.id !== s.id))} style={{ padding: "3px 6px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 4, color: C.textMuted, fontSize: 9, cursor: "pointer" }}>✕</button>
+              </div>
+              {s.outcome && <div style={{ color: C.text, fontSize: 12, marginTop: 6 }}>{s.outcome}</div>}
+              {s.lessons && <div style={{ color: C.amber, fontSize: 11, marginTop: 4, fontStyle: "italic" }}>💡 {s.lessons}</div>}
+            </div>
+          ))}
+
+          {studies.length === 0 && !showForm && (
+            <div style={{ textAlign: "center", padding: 30, color: C.textDim, fontSize: 12 }}>
+              Kristjan studied THOUSANDS of winning stocks across decades. Start building your database here.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // MAIN APP
+    // ═══════════════════════════════════════════════════════
+    const TABS = [
+      { id: "scanner", name: "AI Scanner", icon: "🔍", desc: "Setup grader" },
+      { id: "planner", name: "Trade Planner", icon: "🎯", desc: "Position sizing" },
+      { id: "journal", name: "Journal", icon: "📓", desc: "R-multiple log" },
+      { id: "study", name: "Study Lab", icon: "📚", desc: "Pattern database" },
+    ];
+
+    function App() {
+      const [tab, setTab] = useState("scanner");
+      const [time, setTime] = useState(new Date());
+      useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+
+      return (
+        <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: sans }}>
+          <div style={{
+            padding: "14px 24px", borderBottom: `1px solid ${C.border}`,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            background: `linear-gradient(180deg, ${C.bgHover}, ${C.bg})`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 7,
+                background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`,
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17,
+                boxShadow: `0 0 20px ${C.cyanDim}`,
+              }}>📊</div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5 }}>Qullamaggie Trading System</div>
+                <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 0.5 }}>BREAKOUTS · EPISODIC PIVOTS · PARABOLIC SHORTS</div>
+              </div>
+            </div>
+            <div style={{ fontFamily: mono, fontSize: 12, color: C.textDim }}>{time.toLocaleTimeString()}</div>
+          </div>
+
+          <div style={{ display: "flex", gap: 2, padding: "10px 24px", borderBottom: `1px solid ${C.border}` }}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                padding: "9px 16px", borderRadius: 6, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 600, fontFamily: sans, display: "flex", alignItems: "center", gap: 7,
+                background: tab === t.id ? C.accentGlow : "transparent",
+                color: tab === t.id ? C.accent : C.textDim, transition: "all 0.15s",
+              }}>
+                <span>{t.icon}</span><span>{t.name}</span>
+                <span style={{ fontSize: 10, color: C.textMuted, display: tab === t.id ? "inline" : "none" }}>· {t.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+            {tab === "scanner" && <SetupScanner />}
+            {tab === "planner" && <TradePlanner />}
+            {tab === "journal" && <Journal />}
+            {tab === "study" && <StudyLab />}
+          </div>
+
+          <div style={{ padding: "10px 24px", borderTop: `1px solid ${C.border}`, textAlign: "center", color: C.textMuted, fontSize: 10 }}>
+            Based on Qullamaggie's public teachings · Educational purposes only · Not financial advice
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html>
